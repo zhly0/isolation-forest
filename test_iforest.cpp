@@ -5,11 +5,12 @@
 #include "isolation_forest.h"
 using namespace std;
 
-void main()
+int save_model()
 {
-	int sample_num = 256;
+    int sample_num = 256;
 	int feature_length = 180;
-	/*float** sins = new float*[sample_num]();
+    
+    float** sins = new float*[sample_num]();
 	for (int i=0;i<sample_num;i++)
 	{
 		sins[i] = new float[feature_length]();
@@ -33,7 +34,15 @@ void main()
 	iforest.learn(sins,str_sample,tree_num);
 	ofstream s("model1.data",ios::out);
 	iforest.serialize(s);
-	s.close();*/
+	s.close();
+    return 0;
+}
+
+int test_model()
+{
+	int sample_num = 256;
+	int feature_length = 180;
+	
 	CIsolationForest<float> iforest_predict;
 	ifstream ss("model1.data",ios::in);
 	iforest_predict.deserialize(ss);
@@ -46,5 +55,13 @@ void main()
 	float results;
 	iforest_predict.predict(floats,results);
 	printf("result is %f\n",results);
+    return 0;
+}
 
+void main()
+{
+    //step one :save model:
+    save_model();
+    //step two : test model
+    test_model();
 }
