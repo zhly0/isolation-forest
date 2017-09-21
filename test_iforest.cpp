@@ -45,6 +45,11 @@ int test_model()
 	
 	CIsolationForest<float> iforest_predict;
 	ifstream ss("model1.data",ios::in);
+	if(!ss.is_open())
+	{
+	    std::cout<<"load model failed,you need to train model first!"<<std::endl;
+	    return 0;
+	}
 	iforest_predict.deserialize(ss);
 	float* floats = new float[feature_length]();
 	for (int i=0;i<feature_length;i++)
