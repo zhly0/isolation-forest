@@ -59,12 +59,12 @@ typedef struct min_max{
 }min_max;
 
 typedef struct sample_str{
-	int sample_num;//总的训练样本个数
-	int feature_length;
+	int sample_num;//total number of samples
+	int feature_length;//length of feature
 	//int feature_index;
-	int train_num;//每个节点的训练样本个数
-	int max_tree_depth;//最大的树的深度
-	int node_id;//当前节点的id
+	int train_num;//training sample number
+	int max_tree_depth;//max depth
+	int node_id;//node id
 	sample_str(const int& num,const int& length,const int& train_nums,const int& id)
 	{
 		sample_num = num;
@@ -81,28 +81,27 @@ typedef struct sample_str{
 	}
 
 	void get_random_sample()
-	{
+	{   
+		//get random number,validate under vs2015,other version of vs is unknosn
 		std::random_device rd0 ; 
-		std::default_random_engine e0(rd0) ;
 		std::uniform_real_distribution<> u0(1,sample_num);
 		for (int i=0;i<train_num;i++)
 		{
-			//p_index[i] = u0(e0);
 			bool isthesame=false;
 			do 
 			{
-				p_index[i] = u0(e0);
-				for (int j=0;j<i;j++)
+				p_index[i] = u0(rd0);
+				//the comment code makes the sampling become bootstrap
+				//i.e,sampled with replacement
+				/*for (int j=0;j<i;j++)
 				{
 					isthesame = (p_index[i]==p_index[j])?true:false;
 					if (isthesame)
 					{
 						break;
 					}
-				}
+				}*/
 			} while (isthesame);
-			
-			//printf("random index is %d\n",p_index[i]);
 		}
 		
 	}
@@ -116,65 +115,72 @@ typedef struct sample_str{
 		//DELETE_ARR_PTR(p_min);
 		//DELETE_ARR_PTR(p_max);
 	}
-	int* p_num;//用于确定左右子树的个数
-	int* p_index;//用于指向训练样本的索引，训练样本是随机抽取的
+	int* p_num;//save the left and right sub node number
+	int* p_index;//index to the training sample
 	//T threshold;
-	int subnode[2];//用于存放左右子树的训练样本个数个数，0代表左子树，1代表右子树
-	int* p_sub_index0;
+	int subnode[2];//sub node sample number
+	int* p_sub_index0;//index to the left node sample
 	int* p_sub_index1;
 	//float* p_min;
 	//float* p_max;
-	min_max value_minmax; 
+	min_max value_minmax; //the min and max of the current node
 }sample_str;
+
 
 typedef struct ret_result
 {
-	bool is_leaf;//是否是叶子节点
-	float path_length;//记录当前的路径长度
-	int child_id;//0代表左子树，1代表右子树
+	bool is_leaf;//is node or not
+	float path_length;//path from the root to the leaf
+	int child_id;//child node id,if there is any
 }ret_result;
-/// A node in a binary tree.
+///a node in a tree
 template<typename T>
 class CBinaryNode {
 public:
     CBinaryNode();
 	bool& isLeaf() const{return m_isLeaf};
-	//读取文件
+	//read model
     void deserialize(std::istream&);
 
 	T threshold() const{return m_threshold};
     
-	//sample_num是训练样本的个数，feature是二维数据的指针，也是行数
-	//feature_length是单个特征向量的长度，也是feature的列数
-    int learn( T** feature, sample_str& sample_atr);   
+    //feature:sample features,sample_atr:sample information
+	int learn( T** feature, sample_str& sample_atr);   
 	int predict(T* feature,ret_result& result);
+	//save node information
     void serialize(std::ostream&);
-
-	//当前节点所使用的特征索引
+    //feature index used by current node
     int m_featureIndex;
-	//对当前node给进来的总的训练样本个数
+    //node depth in a tree 
+	int m_depth_count;
+	//total sample number 
 	int m_sample_num; 
-	int m_node_id[3];//子节点的id，0代表当前节点id，1代表左子树，2代表右子树，通过该id实现子树的读写与存储 
-	                 //初始值都为-1
-	//该特征值对应的随机选择的阈值，在训练截断会训练好
+	//node id,m_node_id[0]stands for current node is ，1 represent left node id
+	//2 represent right child node
+	int m_node_id[3];
+	//thresholds used for split
     T m_threshold;
-	//是否是叶子节点
-    bool m_isLeaf;
+    //is leaf or not
+	bool m_isLeaf;
 private:
-	//输入：某个特征向量的某个值，返回0，或1，0代表给入左子树，1代表给入右子树
-    short comparebyFeature(const T&);
+	//compare the feature with thresholds,return 0 or 1,
+	//0 represent the sample goto left node,1 represent
+	//the sample goto right node
+	short comparebyFeature(const T&);
 };
 
 //predict
 template<typename T>
 int CBinaryNode<T>::predict(T* feature,ret_result& result)
 {
-	result.path_length++;
+	//result.path_length++;
 	if (m_isLeaf){
 		result.is_leaf = true;
 		result.child_id = -1;
+		//result.size = 
 	} 
 	else{
+		result.path_length++;
 		result.child_id = comparebyFeature(feature[m_featureIndex]);
 	}
 
@@ -182,20 +188,20 @@ int CBinaryNode<T>::predict(T* feature,ret_result& result)
 	return 0;
 }
 /// Serialization.
-///
 template<typename T>
 void CBinaryNode<T>::serialize(std::ostream& s)
 {
-    s << " " << m_node_id[0];//当前node的id
-    s << " " << m_node_id[1];//左子树id
-    s << " " << m_node_id[2];//右子树id
-    s << " " << m_featureIndex;//使用的特征索引
-    s << " " << m_threshold;//当前特征索引对应的阈值
-    s << " " << m_isLeaf;//是否是叶子节点
+    s << " " << m_node_id[0];
+    s << " " << m_node_id[1];
+    s << " " << m_node_id[2];
+    s << " " << m_featureIndex;
+    s << " " << m_threshold;
+    s << " " << m_isLeaf;
+    s << " " << m_depth_count;
+    s << " " << m_sample_num;
 }
 
 /// Deserialization.
-/// 
 template<typename T>
 void CBinaryNode<T>::deserialize(std::istream& s)
 {
@@ -205,6 +211,8 @@ void CBinaryNode<T>::deserialize(std::istream& s)
     s >> m_featureIndex;
     s >> m_threshold;
 	s >> m_isLeaf;
+	s >> m_depth_count;
+	s >> m_sample_num;
 }
 
 template <typename T> 
@@ -212,19 +220,31 @@ int CBinaryNode<T>::learn(T ** feature, sample_str& sample_atr)
 {
 	
 	std::random_device rd ; 
-	std::default_random_engine e(rd) ; 
+	//std::default_random_engine e(rd) ; 
 	std::uniform_int_distribution<> u(0,sample_atr.feature_length-1);
 
-	m_featureIndex = u(e);//随机选择特征，需要知道总共有多少个特征;sample_atr.feature_index;
-
+	m_featureIndex = u(rd);//u(e);
+	m_sample_num = sample_atr.train_num;
 	//printf("m_featureIndex is %d\n",m_featureIndex);
 	
-	std::random_device rd0 ; 
-	std::default_random_engine e0(rd0) ;
-	std::uniform_real_distribution<> u0(sample_atr.value_minmax.p_min[m_featureIndex],sample_atr.value_minmax.p_max[m_featureIndex]);
+	//use local sample's min max not global min max of all sample
+	float min = feature[sample_atr.p_index[0]][m_featureIndex];
+	float max = feature[sample_atr.p_index[0]][m_featureIndex];
+	for(int i=0;i<m_sample_num;i++) {
+		if (feature[sample_atr.p_index[i]][m_featureIndex] > max)
+			max = feature[sample_atr.p_index[i]][m_featureIndex];
 
-	m_threshold = u0(e0);//随机选择阈值,需要知道该特征值的范围sample_atr.threshold;
-	m_sample_num = sample_atr.train_num;//总的训练样本数
+		if (feature[sample_atr.p_index[i]][m_featureIndex] < min)
+			min = feature[sample_atr.p_index[i]][m_featureIndex];
+	}
+
+	std::random_device rd0 ; 
+	//std::default_random_engine e0(rd0) ;
+	//std::uniform_real_distribution<> u0(sample_atr.value_minmax.p_min[m_featureIndex],sample_atr.value_minmax.p_max[m_featureIndex]);
+	std::uniform_real_distribution<> u0(min,max);
+
+	m_threshold = u0(rd0);//u0(e0);
+	
 
 	/*if (abs(m_threshold)>2)
 	{
@@ -238,7 +258,6 @@ int CBinaryNode<T>::learn(T ** feature, sample_str& sample_atr)
 	for(int i=0;i<m_sample_num;i++)
 	{
 		sample_atr.p_num[i] = comparebyFeature(feature[sample_atr.p_index[i]][m_featureIndex]);
-		//printf("p_index is %d\n",sample_atr.p_index[i]);
 		count += sample_atr.p_num[i];
 		if (!sample_atr.p_num[i]){
 			sample_atr.p_sub_index0[sample_atr.subnode[0]++] = sample_atr.p_index[i];
@@ -246,10 +265,6 @@ int CBinaryNode<T>::learn(T ** feature, sample_str& sample_atr)
 		else{
 			sample_atr.p_sub_index1[sample_atr.subnode[1]++] = sample_atr.p_index[i];
 		}
-		//if (sample_atr.subnode[0] && sample_atr.subnode[1])
-		//{
-		//	printf("sample_atr.subnode[] is not zero!\n");
-		//}
 	}
 	m_isLeaf = (count==0 || count==m_sample_num)?true:false;
 
@@ -260,7 +275,6 @@ int CBinaryNode<T>::learn(T ** feature, sample_str& sample_atr)
 template <typename T> 
 short CBinaryNode<T>::comparebyFeature(const T& feature)
 {
-	//printf("feature is %f,m_threshold is %f\n",feature,m_threshold);
 	return feature<m_threshold?0:1;
 }
 
@@ -270,6 +284,7 @@ CBinaryNode<T>::CBinaryNode():m_isLeaf(false)
 	m_node_id[0] = -1;
 	m_node_id[1] = -1;
 	m_node_id[2] = -1;
+	m_depth_count =-1;
 }
 
 /// A binary tree.
@@ -280,29 +295,22 @@ public:
 
     CBinaryTree();
 	~CBinaryTree();
-	//读取文件
-    void deserialize(std::istream&);  
-	//sample_num是训练样本的个数，feature是二维数据的指针，也是行数
-	//feature_length是单个特征向量的长度，也是feature的列数
-    int learn( T ** feature, sample_str& sample_atr);   
+	void deserialize(std::istream&);  
+	 int learn( T ** feature, sample_str& sample_atr);   
     void serialize(std::ostream&);
 	int predict(T* feature,ret_result& result);
 	int m_node_count;
 	inline int get_depth(){ return m_depth_count;};
 private:
-	//输入：某个特征向量的某个值，返回0，或1，0代表给入左子树，1代表给入右子树
-    int comparebyFeature(const T&,short& subnode);
+	int comparebyFeature(const T&,short& subnode);
 	int recursiveLearn(T ** feature, sample_str& sample_atr);
 
-	//对当前node给进来的总的训练样本个数
 	int m_sample_num; 
 	int m_count_leaf;
-	//该特征值对应的随机选择的阈值，在训练截断会训练好
-	//是否训练完一颗树
-    bool m_isend;
+	bool m_isend;
 	float ajustment(float pathlength);
-	int m_train_num;//从训练样本中随机选取样本的个数
-	int m_depth_count;//记录当前的深度
+	int m_train_num;
+	int m_depth_count;
 	std::map<int,BinaryNodeType> m_binarynode;
 };
 
@@ -319,10 +327,12 @@ CBinaryTree<T>::~CBinaryTree()
 
 template <typename T>
 float CBinaryTree<T>::ajustment(float pathlength)
-{
+{	
 	if (pathlength<2) return 0;
 	if (pathlength==2) return 1;
-	if (pathlength>2) return (2.0*log(pathlength-1) - 2.0*(pathlength-1)/m_depth_count);
+	if (pathlength>2) {		
+		return 2.0*(log(1.0*pathlength-1.0)+0.5772156649 ) - 2.0*(1.0*pathlength-1.0)/(pathlength*1.0);		
+	}	
 }
 template <typename T>
 int CBinaryTree<T>::predict(T* feature,ret_result& result)
@@ -331,6 +341,7 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 	result.child_id=0;
 	result.is_leaf = false;
 	result.path_length = 0;
+	float size;
 	if (m_node_count==0)
 	{
 		return 0;
@@ -340,11 +351,14 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 	{
 		//result.path_length = result.path_length+m_depth_count;
 		//result.path_length--;
-		result.path_length += ajustment(result.path_length);
+		result.path_length = ajustment(m_binarynode[0].m_sample_num);
+		//result.path_length = ajustment(m_binarynode[0].m_depth_count);
+		//result.path_length = ajustment(result.path_length);
+		//result.path_length = 1;
 		return 0;
 	}
 	int id = m_binarynode[0].m_node_id[result.child_id+1];
-	for (int i=0;i<m_depth_count;i++)
+	for (int i=0;i<10;i++)
 	{
 		//id = m_binarynode[i].m_node_id[result.child_id+1];
 		//if (id<0)
@@ -353,6 +367,8 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 		//}
 		m_binarynode[id].predict(feature,result);
 
+		size = m_binarynode[id].m_sample_num;
+		//size = m_binarynode[id].m_depth_count;
 		if (result.is_leaf)
 		{
 			break;
@@ -363,9 +379,10 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 			break;
 		}
 	}
-	//result.path_length = result.path_length+m_depth_count;
-	//result.path_length--;
-	result.path_length += ajustment(result.path_length);
+	
+	result.path_length = ajustment(size);
+	//result.path_length = ajustment(result.path_length);
+	//result.path_length = ajustment(result.path_length);
 	return 0;
 }
 
@@ -381,17 +398,21 @@ int CBinaryTree<T>::learn(T** feature, sample_str& sample_atr)
 	sample_atr.subnode[1] = 0;
 	m_binarynode[0].learn(feature,sample_atr);
 	m_depth_count++;
-	
+	m_binarynode[0].m_depth_count = m_depth_count;
+
 	if (!m_binarynode[0].m_isLeaf)
 	{
 		m_binarynode[0].m_node_id[1] = m_node_count++;
 		m_binarynode[0].m_node_id[2] = m_node_count++;
-		//插入左子树
+		
+		m_depth_count++;
 		m_binarynode.insert(std::map<int, BinaryNodeType> :: value_type(m_binarynode[0].m_node_id[1], BinaryNodeType()));
-		//插入右子树
+		
 		m_binarynode.insert(std::map<int, BinaryNodeType> :: value_type(m_binarynode[0].m_node_id[2], BinaryNodeType()));
 		m_binarynode[1].m_node_id[0] = 1;
 		m_binarynode[2].m_node_id[0] = 2;
+		m_binarynode[1].m_depth_count = m_depth_count;
+		m_binarynode[2].m_depth_count = m_depth_count;
 
 		sample_str sample_atributs_left(sample_atr.sample_num,sample_atr.feature_length,sample_atr.subnode[0],1);
 		sample_atributs_left.max_tree_depth = sample_atr.max_tree_depth;
@@ -406,7 +427,7 @@ int CBinaryTree<T>::learn(T** feature, sample_str& sample_atr)
 		recursiveLearn(feature,sample_atributs_left);
 		recursiveLearn(feature,sample_atributs_right);
 
-		m_depth_count++;
+		//m_depth_count++;
 	}else
 		m_count_leaf++;
 	m_isend = true;
@@ -417,10 +438,7 @@ template <typename T>
 void CBinaryTree<T>::serialize(std::ostream& s)
 {
 	s << " " << m_node_count;
-	s << " " << m_depth_count;
 	s << " " << m_count_leaf;
-	printf("depth is %d\n",m_depth_count);
-	//printf("m_node_count:%d\n",m_node_count);
 	for(int i=0;i<m_node_count;i++)
 	{
 		m_binarynode[i].serialize(s);
@@ -432,10 +450,7 @@ void CBinaryTree<T>::deserialize(std::istream& s)
 {
 	m_node_count=0;
 	s >> m_node_count;
-	//m_node_count++;
-	s >> m_depth_count;
 	s >> m_count_leaf;
-	printf("depth is %d\n",m_depth_count);
 	if (m_node_count!=0)
 	{
 		for(int i=0;i<m_node_count;i++)
@@ -450,21 +465,20 @@ template <typename T>
 int CBinaryTree<T>::recursiveLearn(T** feature, sample_str& sample_atr)
 {
 	m_binarynode[sample_atr.node_id].learn(feature,sample_atr);
-	if (!m_binarynode[sample_atr.node_id].m_isLeaf && (m_depth_count<sample_atr.max_tree_depth))
+	if (!m_binarynode[sample_atr.node_id].m_isLeaf && (m_binarynode[sample_atr.node_id].m_depth_count<sample_atr.max_tree_depth))
 	{
-		m_depth_count++;
 		m_binarynode[sample_atr.node_id].m_node_id[1] = m_node_count++;
 		m_binarynode[sample_atr.node_id].m_node_id[2] = m_node_count++;
 		
 		int node_id = m_binarynode[sample_atr.node_id].m_node_id[1]; 
-		//插入左子树
 		m_binarynode.insert(std::map<int, BinaryNodeType>::value_type(node_id, BinaryNodeType()));
 		m_binarynode[node_id].m_node_id[0] = node_id;
+		m_binarynode[node_id].m_depth_count = m_binarynode[sample_atr.node_id].m_depth_count + 1;
 
 		node_id = m_binarynode[sample_atr.node_id].m_node_id[2];
-		//插入右子树
 		m_binarynode.insert(std::map<int, BinaryNodeType>::value_type(node_id, BinaryNodeType()));
 		m_binarynode[node_id].m_node_id[0] = node_id;
+		m_binarynode[node_id].m_depth_count = m_binarynode[sample_atr.node_id].m_depth_count + 1;
 
 		sample_str sample_atributs_left(sample_atr.sample_num,sample_atr.feature_length,sample_atr.subnode[0],m_binarynode[sample_atr.node_id].m_node_id[1]);
 		sample_atributs_left.max_tree_depth = sample_atr.max_tree_depth;
@@ -491,18 +505,12 @@ public:
     typedef CBinaryTree<T> BinaryTreeType;
 	CIsolationForest();
 	~CIsolationForest();
-	//读取文件
-    void deserialize(std::istream&);  
-	//sample_num是训练样本的个数，feature是二维数据的指针，也是行数
-	//feature_length是单个特征向量的长度，也是feature的列数
-    int learn( T ** feature, sample_str& sample_atr,int tree_num=256);   
+	 void deserialize(std::istream&);  
+	int learn( T ** feature, sample_str& sample_atr,int tree_num=256);   
     void serialize(std::ostream&);
-	//result是异常指数，分数越接近1，越有可能是异常
 	int predict(T* feature,float& result);
 private:
-	//总共的树的个数
-    int m_tree_num;
-	//总共的训练样本个数
+	int m_tree_num;
 	int m_train_num;
 	float m_cn;
 	std::vector<BinaryTreeType> m_binarytree;
@@ -527,11 +535,10 @@ int CIsolationForest<T>::predict(T* feature,float& result)
 	{
 		ret_result ret_results = {0,0,0};
 		m_binarytree[i].predict(feature,ret_results);
-		printf("%dth tree path is %f\n",i,ret_results.path_length);
 		total_path_length += ret_results.path_length;
 	}
 	float avg_path = total_path_length/m_tree_num;
-	printf("avg path is %f\n",avg_path);
+	//printf("avg path is %f\n",avg_path);
 	result = std::pow(2,-avg_path/m_cn);
 	return 0;
 }
@@ -553,15 +560,17 @@ int CIsolationForest<T>::learn( T ** feature, sample_str& sample_atr,int tree_nu
 			minmax.p_min[i] = minmax.p_min[i]<feature[j][i] ? minmax.p_min[i]:feature[j][i];
 			minmax.p_max[i] = minmax.p_max[i]>feature[j][i] ? minmax.p_max[i]:feature[j][i];
 		}
-		minmax.p_min[i] = minmax.p_min[i];//*1.2;
-		minmax.p_max[i] = minmax.p_max[i];//*1.2;
+		minmax.p_min[i] = minmax.p_min[i];
+		minmax.p_max[i] = minmax.p_max[i];
 	}
 	sample_atr.value_minmax = minmax;
 	m_binarytree.clear();
 	m_tree_num = tree_num;
 	m_train_num = sample_atr.train_num;
 	sample_atr.max_tree_depth = 0.9+log(1.0*m_train_num)/log(2.0);
-	m_cn = 2*(log(1.0*(m_train_num)) + 0.5772156649 ) - 2.0*(m_train_num-1)/sample_atr.sample_num;
+
+	m_cn = 2.0*(log(1.0*(1.0*m_train_num-1)) + 0.5772156649 ) - 2.0*(1.0*m_train_num-1)/(1.0*m_train_num);
+	
 	int count_zero_node=0;
 	for(int i=0;i<m_tree_num;i++)
 	{
@@ -579,12 +588,11 @@ int CIsolationForest<T>::learn( T ** feature, sample_str& sample_atr,int tree_nu
 			count_zero_node++;
 			continue;
 		}
-		//m_cn += binarytree.get_depth();
 		m_binarytree.push_back(binarytree);
 	}
 
 	m_tree_num = m_tree_num-count_zero_node;
-	//m_cn = m_cn/m_tree_num;
+
 	DELETE_ARR_PTR(minmax.p_min);
 	DELETE_ARR_PTR(minmax.p_max);
 	return 0;
