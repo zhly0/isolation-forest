@@ -51,6 +51,10 @@
 #include <random>
 using namespace std;
 
+//DISTANCE_MODE's min:1 max:3,represent 3 different calculate mode
+#define DISTANCE_MODE 1
+
+
 #define DELETE_PTR(p) { if(NULL != p) { delete p; p = NULL;} }
 #define DELETE_ARR_PTR(p) { if(NULL != p) { delete []p; p = NULL;} }
 typedef struct min_max{
@@ -341,7 +345,7 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 	result.child_id=0;
 	result.is_leaf = false;
 	result.path_length = 0;
-	float size;
+	float size=0.0f;
 	if (m_node_count==0)
 	{
 		return 0;
@@ -351,7 +355,14 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 	{
 		//result.path_length = result.path_length+m_depth_count;
 		//result.path_length--;
+#ifdef DISTANCE_MODE==1
+		result.path_length = m_binarynode[0].m_depth_count;
+#elif DISTANCE_MODE==2
+		result.path_length = ajustment(m_binarynode[0].m_depth_count);
+#elif DISTANCE_MODE==3
 		result.path_length = ajustment(m_binarynode[0].m_sample_num);
+#endif
+		//result.path_length = ajustment(m_binarynode[0].m_sample_num);
 		//result.path_length = ajustment(m_binarynode[0].m_depth_count);
 		//result.path_length = ajustment(result.path_length);
 		//result.path_length = 1;
@@ -367,7 +378,16 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 		//}
 		m_binarynode[id].predict(feature,result);
 
-		size = m_binarynode[id].m_sample_num;
+#ifdef DISTANCE_MODE==1
+		size = m_binarynode[id].m_depth_count;
+#elif DISTANCE_MODE==2
+		size = ajustment(m_binarynode[id].m_depth_count);
+#elif DISTANCE_MODE==3
+		size = ajustment(m_binarynode[id].m_sample_num);
+#endif
+		
+		
+		//size = m_binarynode[id].m_sample_num;
 		//size = m_binarynode[id].m_depth_count;
 		if (result.is_leaf)
 		{
@@ -380,7 +400,7 @@ int CBinaryTree<T>::predict(T* feature,ret_result& result)
 		}
 	}
 	
-	result.path_length = ajustment(size);
+	result.path_length = size;//ajustment(size);
 	//result.path_length = ajustment(result.path_length);
 	//result.path_length = ajustment(result.path_length);
 	return 0;
@@ -569,7 +589,16 @@ int CIsolationForest<T>::learn( T ** feature, sample_str& sample_atr,int tree_nu
 	m_train_num = sample_atr.train_num;
 	sample_atr.max_tree_depth = 0.9+log(1.0*m_train_num)/log(2.0);
 
+	//m_cn = 2.0*(log(1.0*(1.0*m_train_num-1)) + 0.5772156649 ) - 2.0*(1.0*m_train_num-1)/(1.0*m_train_num);
+	
+#ifdef DISTANCE_MODE==1
+	m_cn = sample_atr.max_tree_depth;
+#elif DISTANCE_MODE==2
+	m_cn = 2.0*(log(1.0*(1.0*sample_atr.max_tree_depth-1)) + 0.5772156649 ) - 2.0*(1.0*sample_atr.max_tree_depth-1)/(1.0*sample_atr.max_tree_depth);
+#elif DISTANCE_MODE==3
 	m_cn = 2.0*(log(1.0*(1.0*m_train_num-1)) + 0.5772156649 ) - 2.0*(1.0*m_train_num-1)/(1.0*m_train_num);
+#endif	
+	
 	
 	int count_zero_node=0;
 	for(int i=0;i<m_tree_num;i++)
